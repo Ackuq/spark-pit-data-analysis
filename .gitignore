@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Output file
+output/**/*.png
+
+# VSCode settings
+.vscode
+
+# Mac files
+.DS_Store
