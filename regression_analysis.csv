@@ -1,0 +1,10 @@
+,slope,intercept,rvalue,pvalue,stderr,function,dataStructure,metric
+0,   4.002e+02,  -5.984e+06,   1.000e+00,   5.922e-06,   9.739e-01,Exploding,sorted-asc,shuffleBytesWritten
+0,   3.996e+02,   3.190e+04,   1.000e+00,   1.808e-09,   1.699e-02,EarlyStopSortMerge,sorted-asc,shuffleBytesWritten
+0,   5.732e+02,   4.191e+05,   1.000e+00,   6.175e-09,   4.504e-02,Union,sorted-asc,shuffleBytesWritten
+0,   3.997e+02,  -5.973e+06,   1.000e+00,   5.913e-06,   9.719e-01,Exploding,sorted-desc,shuffleBytesWritten
+0,   3.990e+02,   3.131e+04,   1.000e+00,   1.837e-09,   1.710e-02,EarlyStopSortMerge,sorted-desc,shuffleBytesWritten
+0,   5.732e+02,   4.394e+05,   1.000e+00,   6.980e-09,   4.789e-02,Union,sorted-desc,shuffleBytesWritten
+0,   1.102e+03,  -4.801e+07,   1.000e+00,   2.530e-05,   5.546e+00,Exploding,sorted-rand,shuffleBytesWritten
+0,   1.102e+03,  -4.135e+07,   1.000e+00,   2.821e-05,   5.852e+00,EarlyStopSortMerge,sorted-rand,shuffleBytesWritten
+0,   1.302e+03,  -5.239e+07,   1.000e+00,   4.006e-05,   8.239e+00,Union,sorted-rand,shuffleBytesWritten

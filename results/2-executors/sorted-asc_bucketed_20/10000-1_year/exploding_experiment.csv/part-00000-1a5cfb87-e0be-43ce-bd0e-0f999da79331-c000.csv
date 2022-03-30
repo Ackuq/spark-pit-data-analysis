@@ -1,0 +1,11 @@
+numStages,numTasks,elapsedTime,stageDuration,executorRunTime,executorCpuTime,executorDeserializeTime,executorDeserializeCpuTime,resultSerializationTime,jvmGCTime,shuffleFetchWaitTime,shuffleWriteTime,resultSize,diskBytesSpilled,memoryBytesSpilled,peakExecutionMemory,recordsRead,bytesRead,recordsWritten,bytesWritten,shuffleRecordsRead,shuffleTotalBlocksFetched,shuffleLocalBlocksFetched,shuffleRemoteBlocksFetched,shuffleTotalBytesRead,shuffleLocalBytesRead,shuffleRemoteBytesRead,shuffleRemoteBytesReadToDisk,shuffleBytesWritten,shuffleRecordsWritten,runNumber
+3,41,613,583,835,637,97,88,0,0,0,5,197230,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,1
+3,41,269,236,255,257,57,70,0,0,0,3,196757,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,3
+3,41,270,239,247,235,60,70,0,9,0,3,196628,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,5
+3,41,394,337,324,283,80,82,0,0,0,4,197617,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,7
+3,41,300,265,287,276,72,78,0,0,0,4,197273,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,8
+3,41,527,397,480,296,91,79,0,28,0,4,197574,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,9
+3,41,267,230,250,244,59,74,0,0,0,3,196542,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,10
+3,41,360,325,326,273,107,80,0,11,0,3,197531,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,2
+3,41,264,237,271,263,66,75,0,0,0,4,197316,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,4
+3,41,294,253,279,265,69,76,0,0,0,3,197531,0,0,692250112,80,2354888,0,0,20,20,20,0,840,840,0,0,840,20,6

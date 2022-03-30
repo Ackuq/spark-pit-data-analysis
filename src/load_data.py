@@ -1,5 +1,6 @@
 import os
 import re
+from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Match, cast
@@ -7,12 +8,39 @@ from typing import Dict, List, Match, cast
 import pandas as pd
 
 EXECUTOR_DIR_REGEX = r"^(\d+)\-executors$"
-STRUCTURE_TYPE_REGEX = r"^([a-zA-Z\-]+)$"
+STRUCTURE_TYPE_REGEX = r"^([a-zA-Z\-]+|[a-zA-Z\-]+\_bucketed_\d+)$"
 DATASET_REGEX = r"^(\d+)\-1\_year$"
 CSV_REGEX = r"^[a-zA-Z\-0-9]+.csv$"
 
 
-class Function(Enum):
+class OrderedEnum(Enum):
+    @property
+    @abstractmethod
+    def __ordering__(self) -> List["OrderedEnum"]:
+        raise NotImplementedError
+
+    def __ge__(self, other):
+        if self.__class__ is other.__class__:
+            return self.__ordering__.index(self) >= self.__ordering__.index(other)
+        raise NotImplementedError
+
+    def __gt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.__ordering__.index(self) > self.__ordering__.index(other)
+        raise NotImplementedError
+
+    def __le__(self, other):
+        if self.__class__ is other.__class__:
+            return self.__ordering__.index(self) <= self.__ordering__.index(other)
+        raise NotImplementedError
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.__ordering__.index(self) < self.__ordering__.index(other)
+        raise NotImplementedError
+
+
+class Function(OrderedEnum):
     Exploding = "exploding"
     Union = "union"
     EarlyStopSortMerge = "earlyStopSortMerge"
@@ -21,15 +49,35 @@ class Function(Enum):
     def verbose(self):
         return FUNCTION_VERBOSE_NAME[self]
 
+    @property
+    def __ordering__(self):
+        return [self.Exploding, self.Union, self.EarlyStopSortMerge]
 
-class StructureType(Enum):
+
+class StructureType(OrderedEnum):
     Ascending = "sorted-asc"
     Descending = "sorted-desc"
     Random = "sorted-rand"
+    AscendingBucketed20 = "sorted-asc_bucketed_20"
+    AscendingBucketed40 = "sorted-asc_bucketed_40"
+    AscendingBucketed80 = "sorted-asc_bucketed_80"
+    AscendingBucketed160 = "sorted-asc_bucketed_160"
 
     @property
     def verbose(self):
         return STRUCTURE_TYPE_VERBOSE_NAME[self]
+
+    @property
+    def __ordering__(self):
+        return [
+            self.Ascending,
+            self.Descending,
+            self.Random,
+            self.AscendingBucketed20,
+            self.AscendingBucketed40,
+            self.AscendingBucketed80,
+            self.AscendingBucketed160,
+        ]
 
 
 FUNCTION_VERBOSE_NAME: Dict[Function, str] = {
@@ -42,6 +90,10 @@ STRUCTURE_TYPE_VERBOSE_NAME: Dict[StructureType, str] = {
     StructureType.Ascending: "Ascending order",
     StructureType.Descending: "Decending order",
     StructureType.Random: "Random order",
+    StructureType.AscendingBucketed20: "Ascending order, 20 buckets",
+    StructureType.AscendingBucketed40: "Ascending order, 40 buckets",
+    StructureType.AscendingBucketed80: "Ascending order, 80 buckets",
+    StructureType.AscendingBucketed160: "Ascending order, 160 buckets",
 }
 
 
