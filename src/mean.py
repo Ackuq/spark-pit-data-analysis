@@ -8,7 +8,7 @@ from scipy import stats
 from generate_graphs import Metric
 from load_data import ExecutorConfigurationContent, Function, StructureType, load_data
 
-metrics = [Metric.ShuffleBytesWritten]
+metrics = [Metric.ElapsedTime, Metric.PeakExecutionMemory]
 
 
 def save_speedup(
@@ -124,5 +124,5 @@ if __name__ == "__main__":
     args = argument_parser.parse_args()
 
     data = load_data(args.input)
-    # save_mean(data)
+    save_mean(data)
     save_speedup(data)

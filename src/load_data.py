@@ -3,13 +3,13 @@ import re
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Match, cast
+from typing import Dict, List, Match, Tuple, cast
 
 import pandas as pd
 
 EXECUTOR_DIR_REGEX = r"^(\d+)\-executors$"
 STRUCTURE_TYPE_REGEX = r"^([a-zA-Z\-]+|[a-zA-Z\-]+\_bucketed_\d+)$"
-DATASET_REGEX = r"^(\d+)\-1\_year$"
+DATASET_REGEX = r"^(\d+)[\-\_]1\_year$"
 CSV_REGEX = r"^[a-zA-Z\-0-9]+.csv$"
 
 
@@ -118,6 +118,14 @@ class DataFrameTypes:
     std: pd.Series
 
 
+@dataclass
+class SeriesTypes:
+    raw: pd.Series
+    median: float
+    mean: float
+    std: float
+
+
 FunctionOutput = Dict[Function, DataFrameTypes]
 
 
@@ -132,6 +140,7 @@ def get_function_output(directory: str) -> FunctionOutput:
         ][0]
         full_file_path = f"{path}/{output_file}"
         dataframe = pd.read_csv(full_file_path)
+        dataframe = dataframe[dataframe["runNumber"] != 1]
         outputs[function.key] = DataFrameTypes(
             raw=dataframe,
             median=dataframe.median(),
@@ -180,9 +189,40 @@ def get_executor_structure_types(directory: str) -> StructureTypeContent:
 
 
 ExecutorConfigurationContent = Dict[int, StructureTypeContent]
+HiveContent = Dict[int, Dict[StructureType, Dict[int, SeriesTypes]]]
+
+HIVE_REGEX = r"hive_(?P<executors>\d)_2048mb_1vcpu_container_2048mb_1vcpu\.csv"
 
 
-def load_data(directory: str) -> ExecutorConfigurationContent:
+def load_hive_data(directory: str) -> HiveContent:
+    results: HiveContent = {}
+    for file in os.listdir(directory + "/hive"):
+        match = re.match(HIVE_REGEX, file)
+        if match is not None:
+            executors = int(match.group("executors"))
+            results[executors] = {}
+            path = directory + "/hive/" + file
+            dataframe = pd.read_csv(path)
+            groups = dataframe.groupby(["size", "structure"])
+            for (size_str, structure), df in groups:
+                df = cast(
+                    pd.Series, df["elapsed_time"]
+                )  # This is seconds, convert it to miliseconds by multiplying by 1000
+                df = df.map(lambda x: x * 1000)
+                structure_type = StructureType(structure.replace("_", "-"))
+                size = int(cast(Match[str], re.match(DATASET_REGEX, size_str)).group(1))
+                if structure_type not in results[executors]:
+                    results[executors][structure_type] = {}
+                results[executors][structure_type][size] = SeriesTypes(
+                    raw=df,
+                    median=df.median(),
+                    mean=df.mean(),
+                    std=df.std(),
+                )
+    return results
+
+
+def load_data(directory: str) -> Tuple[ExecutorConfigurationContent, HiveContent]:
     executor_configurations = [
         int(cast(Match[str], re.match(EXECUTOR_DIR_REGEX, executor_dir)).group(1))
         for executor_dir in os.listdir(directory)
@@ -195,4 +235,5 @@ def load_data(directory: str) -> ExecutorConfigurationContent:
         ] = get_executor_structure_types(
             f"{directory}/{executor_configuration}-executors"
         )
-    return executor_configuration_content
+    hive_results = load_hive_data(directory)
+    return executor_configuration_content, hive_results

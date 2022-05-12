@@ -11,6 +11,7 @@ from load_data import (
     DatasetContent,
     ExecutorConfigurationContent,
     Function,
+    HiveContent,
     StructureType,
     StructureTypeContent,
     load_data,
@@ -51,8 +52,10 @@ METRIC_VERBOSE: Dict[Metric, str] = {
 class PlotData(TypedDict):
     x: List[int]
     y: List[Union[int, float]]
-    err: List[int]
+    err: List[Union[int, float]]
 
+
+LS_MAP = {Function.EarlyStopSortMerge: "solid", Function.Exploding: "dashed", Function.Union: "dashdot"}
 
 CombinedStructures = List[Tuple[List[StructureType], DatasetContent]]
 
@@ -76,8 +79,7 @@ def _combine_structures(
                     other_value = other[x][function].mean.get(metric.value)
                     if (current_value == 0.0 and other_value == 0.0) or (
                         current_value != 0.0
-                        and abs(current_value - other_value)  # type: ignore
-                        / current_value
+                        and abs(current_value - other_value) / current_value  # type: ignore
                         # Differ by at most 0.2%
                     ) <= 0.002:
                         found = True
@@ -127,8 +129,7 @@ def plot_executors(
             figs.append(
                 (
                     fig,
-                    f"output/{metric.value}/all-data-{structure_type.value}"
-                    f"-{function.value}-{metric.value}",
+                    f"output/{metric.value}/all-data-{structure_type.value}" f"-{function.value}-{metric.value}",
                 )
             )
             fig.tight_layout()
@@ -166,9 +167,7 @@ def plot_speedup(
                 for x in sorted(datasets):
                     output["x"].append(x)
                     output["y"].append(
-                        data[base_line][structure_type][x][function].mean.get(
-                            metric.value, 0.0
-                        )
+                        data[base_line][structure_type][x][function].mean.get(metric.value, 0.0)
                         / datasets[x][function].mean.get(metric.value, 0.0)
                     )
                 ax.errorbar(
@@ -184,10 +183,7 @@ def plot_speedup(
             plt.tight_layout()
             if not os.path.exists(f"output/{metric.value}"):
                 os.makedirs(f"output/{metric.value}")
-            plt.savefig(
-                f"output/{metric.value}/speedup-{structure_type.value}"
-                f"-{function.value}-{metric.value}"
-            )
+            plt.savefig(f"output/{metric.value}/speedup-{structure_type.value}" f"-{function.value}-{metric.value}")
             plt.close(fig)
 
 
@@ -203,6 +199,10 @@ def plot_comparision_executors(
         StructureType.Ascending,
         StructureType.Descending,
         StructureType.Random,
+        StructureType.AscendingBucketed160,
+        StructureType.AscendingBucketed80,
+        StructureType.AscendingBucketed40,
+        StructureType.AscendingBucketed20,
     ],
 ):
     for metric in Metric:
@@ -217,12 +217,8 @@ def plot_comparision_executors(
                 dataset = data[num_executor][structure_type][datasize]
                 for function in functions:
                     output[function]["x"].append(num_executor)
-                    output[function]["y"].append(
-                        dataset[function].mean.get(metric.value)
-                    )
-                    output[function]["err"].append(
-                        dataset[function].std.get(metric.value)
-                    )
+                    output[function]["y"].append(dataset[function].mean.get(metric.value))
+                    output[function]["err"].append(dataset[function].std.get(metric.value))
 
             for function in functions:
                 ax.errorbar(
@@ -245,6 +241,66 @@ def plot_comparision_executors(
                     f"{structure_type.value}-executor_comparision-{metric.value}"
                 )
             )
+            plt.close(fig)
+
+
+def plot_comparision_structures(
+    data: ExecutorConfigurationContent,
+    num_executors: int,
+    functions: List[Function] = [
+        Function.Exploding,
+        Function.Union,
+        Function.EarlyStopSortMerge,
+    ],
+    structures: List[StructureType] = [
+        StructureType.Ascending,
+        StructureType.Descending,
+        StructureType.Random,
+        # StructureType.AscendingBucketed20,
+        # StructureType.AscendingBucketed40,
+        # StructureType.AscendingBucketed80,
+        # StructureType.AscendingBucketed160,
+    ],
+):
+    for metric in Metric:
+        figs: List[Tuple[Figure, Axes, str]] = []
+        for structure in structures:
+            datasets = data[num_executors][structure]
+            fig, ax = plt.subplots()
+            for function in functions:
+                values: PlotData = {"x": [], "y": [], "err": []}
+                for x in sorted(datasets):
+                    values["x"].append(x)
+                    values["y"].append(datasets[x][function].mean.get(metric.value))
+                    values["err"].append(datasets[x][function].std.get(metric.value))
+                ax.errorbar(values["x"], values["y"], values["err"], label=function.verbose)
+            if metric in [
+                Metric.ElapsedTime,
+                Metric.PeakExecutionMemory,
+                Metric.ShuffleBytesWritten,
+            ]:
+                ax.set_yscale("log")
+            ax.set_title(f"{num_executors} executors - {structure.verbose}")
+            ax.set_ylabel(metric.verbose)
+            ax.set_xlabel("Dataset size (unique IDs)")
+            ax.set_xscale("log")
+            ax.legend()
+            fig.tight_layout()
+            figs.append(
+                (
+                    fig,
+                    ax,
+                    f"output/{metric.value}/{num_executors}-executors-" f"{structure.value}-{metric.value}",
+                )
+            )
+        if not os.path.exists(f"output/{metric.value}"):
+            os.makedirs(f"output/{metric.value}")
+
+        y_min, y_max = min([ax.get_ylim()[0] for _, ax, _ in figs]), max([ax.get_ylim()[1] for _, ax, _ in figs])
+
+        for fig, ax, path in figs:
+            ax.set_ylim(y_min, y_max)
+            fig.savefig(path)
             plt.close(fig)
 
 
@@ -272,9 +328,7 @@ def plot_comparision(
             executors = data[num_executors]
             fig, ax = plt.subplots()
             # Combine lines with same values
-            combined_structures = _combine_structures(
-                executors, structures, function, metric
-            )
+            combined_structures = _combine_structures(executors, structures, function, metric)
             for structure_types, datasets in combined_structures:
                 values: PlotData = {"x": [], "y": [], "err": []}
                 for x in sorted(datasets):
@@ -285,11 +339,14 @@ def plot_comparision(
                     values["x"],
                     values["y"],
                     values["err"],
-                    label=" & ".join(
-                        structure_type.verbose for structure_type in structure_types
-                    ),
+                    label=" & ".join(structure_type.verbose for structure_type in structure_types),
                 )
-
+            if metric in [
+                Metric.ElapsedTime,
+                Metric.PeakExecutionMemory,
+                Metric.ShuffleBytesWritten,
+            ]:
+                ax.set_yscale("log")
             ax.set_title(f"{num_executors} executors - {function.verbose}")
             ax.set_ylabel(metric.verbose)
             ax.set_xlabel("Dataset size (unique IDs)")
@@ -300,21 +357,90 @@ def plot_comparision(
                 (
                     fig,
                     ax,
-                    f"output/{metric.value}/{num_executors}-executors-"
-                    f"{function.value}-{metric.value}",
+                    f"output/{metric.value}/{num_executors}-executors-" f"{function.value}-{metric.value}",
                 )
             )
         if not os.path.exists(f"output/{metric.value}"):
             os.makedirs(f"output/{metric.value}")
 
-        y_min, y_max = min([ax.get_ylim()[0] for _, ax, _ in figs]), max(
-            [ax.get_ylim()[1] for _, ax, _ in figs]
-        )
+        y_min, y_max = min([ax.get_ylim()[0] for _, ax, _ in figs]), max([ax.get_ylim()[1] for _, ax, _ in figs])
 
         for fig, ax, path in figs:
             ax.set_ylim(y_min, y_max)
             fig.savefig(path)
             plt.close(fig)
+
+
+def plot_peak_memory(data: ExecutorConfigurationContent):
+    metric = Metric.PeakExecutionMemory
+    structures = [
+        StructureType.Ascending,
+        StructureType.Descending,
+        StructureType.Random,
+    ]
+    fig, ax = plt.subplots()
+    for function in Function:
+        values: PlotData = {"x": [], "y": [], "err": []}
+        function_data = _combine_structures(data[2], structures, function, metric)
+        assert len(function_data) == 1
+        dataset = function_data[0][1]
+        for x in sorted(dataset):
+            values["x"].append(x)
+            values["y"].append(dataset[x][function].mean.get(metric.value))
+            values["err"].append(dataset[x][function].std.get(metric.value))
+        ax.errorbar(values["x"], values["y"], values["err"], label=function.verbose)
+    ax.set_yscale("log")
+    ax.set_title("2 executors - Peak memory execution")
+    ax.set_ylabel(metric.verbose)
+    ax.set_xlabel("Dataset size (unique IDs)")
+    ax.set_xscale("log")
+    ax.legend()
+    fig.tight_layout()
+    if not os.path.exists(f"output/{metric.value}"):
+        os.makedirs(f"output/{metric.value}")
+    fig.savefig(
+        f"output/{metric.value}/2-executors-all-{metric.value}",
+    )
+    plt.close(fig)
+
+
+def plot_shuffle_writes(data: ExecutorConfigurationContent):
+    metric = Metric.ShuffleBytesWritten
+    structures = [
+        StructureType.Ascending,
+        StructureType.Descending,
+        StructureType.Random,
+    ]
+    fig, ax = plt.subplots()
+    for function in Function:
+        function_data = _combine_structures(data[2], structures, function, metric)
+        assert len(function_data) == 2
+        for structure_types, dataset in function_data:
+            values: PlotData = {"x": [], "y": [], "err": []}
+            for x in sorted(dataset):
+                values["x"].append(x)
+                values["y"].append(dataset[x][function].mean.get(metric.value))
+                values["err"].append(dataset[x][function].std.get(metric.value))
+            ax.errorbar(
+                values["x"],
+                values["y"],
+                values["err"],
+                label=(f"{function.verbose} - {' & '.join(s.verbose for s in structure_types).replace('order ', '')}"),
+                ls=LS_MAP[function],
+            )
+
+    ax.set_yscale("log")
+    ax.set_title("2 executors - Shuffle bytes written")
+    ax.set_ylabel(metric.verbose)
+    ax.set_xlabel("Dataset size (unique IDs)")
+    ax.set_xscale("log")
+    ax.legend(prop={"size": 8})
+    fig.tight_layout()
+    if not os.path.exists(f"output/{metric.value}"):
+        os.makedirs(f"output/{metric.value}")
+    fig.savefig(
+        f"output/{metric.value}/2-executors-all-{metric.value}",
+    )
 
 
 def plot_buckets_compare(
@@ -336,9 +462,7 @@ def plot_buckets_compare(
     ]
 
     for metric in Metric:
-        output: Dict[Function, PlotData] = {
-            fun: {"x": [], "y": [], "err": []} for fun in functions
-        }
+        output: Dict[Function, PlotData] = {fun: {"x": [], "y": [], "err": []} for fun in functions}
         refs: Dict[Function, int] = {}
 
         fig, ax = plt.subplots(figsize=(6.4, 5.8))
@@ -346,9 +470,7 @@ def plot_buckets_compare(
         if metric == metric.MemoryBytesSpilled or metric == metric.DiskBytesSpilled:
             ax.ticklabel_format(axis="y", scilimits=(9, 9))
 
-        for function, values in data[num_executors][reference_structure][
-            dataset_size
-        ].items():
+        for function, values in data[num_executors][reference_structure][dataset_size].items():
             refs[function] = values.mean.get(metric.value)
 
         for bucket_structure, buckets in bucket_structures:
@@ -395,6 +517,79 @@ def plot_buckets_compare(
         plt.close(fig)
 
 
+def hive_compare(
+    data: ExecutorConfigurationContent,
+    hive_data: HiveContent,
+    functions: List[Function] = [
+        Function.Exploding,
+        Function.Union,
+        Function.EarlyStopSortMerge,
+    ],
+):
+    # Only compare elapsed time for 3 nodes / 8 executors, sorted ascending
+    metric = Metric.ElapsedTime
+    num_executors = 8
+    nodes = 3
+    structure_type = StructureType.Ascending
+    spark = data[num_executors][structure_type]
+    hive = hive_data[nodes][structure_type]
+
+    fig, ax = plt.subplots(figsize=(6.4, 5.8))
+    for function in functions:
+        plot_data: PlotData = {"x": [], "y": [], "err": []}
+        for size in sorted(spark.keys()):
+            plot_data["x"].append(size)
+            plot_data["y"].append(spark[size][function].mean.get(metric.value))
+            plot_data["err"].append(spark[size][function].std.get(metric.value))
+
+        ax.errorbar(
+            plot_data["x"],
+            plot_data["y"],
+            plot_data["err"],
+            label=function.verbose,
+        )
+
+    plot_data: PlotData = {"x": [], "y": [], "err": []}
+    for size in sorted(hive.keys()):
+        plot_data["x"].append(size)
+        plot_data["y"].append(hive[size].mean)
+        plot_data["err"].append(hive[size].std)
+
+    ax.errorbar(
+        plot_data["x"],
+        plot_data["y"],
+        plot_data["err"],
+        label="Tez (Exploding)",
+    )
+    if metric in [
+        Metric.ElapsedTime,
+        Metric.PeakExecutionMemory,
+        Metric.ShuffleBytesWritten,
+    ]:
+        ax.set_yscale("log")
+    ax.set_title(f"{nodes} nodes, {num_executors} executors, {structure_type.verbose} - Hive comparision")
+    ax.set_ylabel(metric.verbose)
+    ax.set_xlabel("Dataset size (unique IDs)")
+    ax.set_xscale("log")
+    ax.legend()
+    plt.tight_layout()
+    functions_string = "_".join([function.value for function in functions])
+    if not os.path.exists(f"output/{metric.value}"):
+        os.makedirs(f"output/{metric.value}")
+    plt.savefig(
+        (
+            "output/{}/hive-comparision-{}-nodes-{}-executors-{}-{}".format(
+                metric.value,
+                nodes,
+                num_executors,
+                metric.value,
+                functions_string,
+            )
+        ),
+    )
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser(prog="Graph generation")
 
@@ -408,11 +603,15 @@ if __name__ == "__main__":
 
     args = argument_parser.parse_args()
 
-    data = load_data(args.input)
+    data, hive_data = load_data(args.input)
 
-    for i in [1_000_000, 10_000_000]:
-        plot_buckets_compare(data, 2, i)
+    # plot_peak_memory(data)
+    plot_shuffle_writes(data)
+    # plot_comparision_structures(data, 2)
+    # for i in [100_000, 1_000_000, 10_000_000]:
+    #     plot_buckets_compare(data, 2, i)
     # plot_comparision(data, 2)
+    # plot_comparision(data, 8)
     # plot_executors(data, Function.EarlyStopSortMerge)
     # plot_executors(data, Function.Union)
     # plot_executors(data, Function.Exploding)
@@ -420,4 +619,5 @@ if __name__ == "__main__":
     # plot_speedup(data, Function.Union)
     # plot_speedup(data, Function.Exploding)
 
-    plot_comparision_executors(data, 10_000_000)
+    # plot_comparision_executors(data, 10_000_000)
+    # hive_compare(data, hive_data)
