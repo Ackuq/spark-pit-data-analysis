@@ -178,18 +178,17 @@ def get_executor_structure_types(directory: str) -> StructureTypeContent:
     structure_type_content: StructureTypeContent = {}
     for structure_type_str in structure_types:
         # Skip the raw
-        if structure_type_str == "raw":
+        if structure_type_str == "raw" or structure_type_str == "yelp":
             continue
 
         structure_type = StructureType(structure_type_str)
-        structure_type_content[structure_type] = get_datasets(
-            f"{directory}/{structure_type.value}"
-        )
+        structure_type_content[structure_type] = get_datasets(f"{directory}/{structure_type.value}")
     return structure_type_content
 
 
 ExecutorConfigurationContent = Dict[int, StructureTypeContent]
 HiveContent = Dict[int, Dict[StructureType, Dict[int, SeriesTypes]]]
+YelpContent = Dict[int, FunctionOutput]
 
 HIVE_REGEX = r"hive_(?P<executors>\d)_2048mb_1vcpu_container_2048mb_1vcpu\.csv"
 
@@ -222,18 +221,19 @@ def load_hive_data(directory: str) -> HiveContent:
     return results
 
 
-def load_data(directory: str) -> Tuple[ExecutorConfigurationContent, HiveContent]:
+def load_data(directory: str) -> Tuple[ExecutorConfigurationContent, HiveContent, YelpContent]:
     executor_configurations = [
         int(cast(Match[str], re.match(EXECUTOR_DIR_REGEX, executor_dir)).group(1))
         for executor_dir in os.listdir(directory)
         if re.match(EXECUTOR_DIR_REGEX, executor_dir)
     ]
     executor_configuration_content: ExecutorConfigurationContent = {}
+
+    yelp_results: YelpContent = {}
     for executor_configuration in executor_configurations:
-        executor_configuration_content[
-            executor_configuration
-        ] = get_executor_structure_types(
-            f"{directory}/{executor_configuration}-executors"
-        )
+        dir = f"{directory}/{executor_configuration}-executors"
+        if os.path.exists(dir + "/yelp"):
+            yelp_results[executor_configuration] = get_function_output(dir + "/yelp")
+        executor_configuration_content[executor_configuration] = get_executor_structure_types(dir)
     hive_results = load_hive_data(directory)
-    return executor_configuration_content, hive_results
+    return executor_configuration_content, hive_results, yelp_results

@@ -1,7 +1,7 @@
 import argparse
 import os
 from enum import Enum
-from typing import Dict, List, Tuple, TypedDict, Union
+from typing import Any, Dict, List, Tuple, TypedDict, Union
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
@@ -14,6 +14,7 @@ from load_data import (
     HiveContent,
     StructureType,
     StructureTypeContent,
+    YelpContent,
     load_data,
 )
 
@@ -51,8 +52,8 @@ METRIC_VERBOSE: Dict[Metric, str] = {
 
 class PlotData(TypedDict):
     x: List[int]
-    y: List[Union[int, float]]
-    err: List[Union[int, float]]
+    y: List[Union[int, float, Any]]
+    err: List[Union[int, float, Any]]
 
 
 LS_MAP = {Function.EarlyStopSortMerge: "solid", Function.Exploding: "dashed", Function.Union: "dashdot"}
@@ -167,8 +168,8 @@ def plot_speedup(
                 for x in sorted(datasets):
                     output["x"].append(x)
                     output["y"].append(
-                        data[base_line][structure_type][x][function].mean.get(metric.value, 0.0)
-                        / datasets[x][function].mean.get(metric.value, 0.0)
+                        data[base_line][structure_type][x][function].mean.get(metric.value, 0.0)  # type: ignore
+                        / datasets[x][function].mean.get(metric.value, 0.0)  # type: ignore
                     )
                 ax.errorbar(
                     output["x"],
@@ -471,7 +472,7 @@ def plot_buckets_compare(
             ax.ticklabel_format(axis="y", scilimits=(9, 9))
 
         for function, values in data[num_executors][reference_structure][dataset_size].items():
-            refs[function] = values.mean.get(metric.value)
+            refs[function] = values.mean.get(metric.value)  # type: ignore
 
         for bucket_structure, buckets in bucket_structures:
             dataset = data[num_executors][bucket_structure][dataset_size]
@@ -590,6 +591,39 @@ def hive_compare(
     plt.close(fig)
 
 
+def plot_yelp_results(yelp: YelpContent):
+    for metric in Metric:
+        fig, ax = plt.subplots()
+        ax.set_title(f"Yelp dataset - {metric.verbose}")
+        output: Dict[Function, PlotData] = {function: {"x": [], "y": [], "err": []} for function in Function}
+        for num_executors in sorted(yelp.keys()):
+            function_output = yelp[num_executors]
+            for function, dataset in function_output.items():
+                output[function]["x"].append(num_executors)
+                output[function]["y"].append(dataset.mean.get(metric.value))
+                output[function]["err"].append(dataset.std.get(metric.value))
+
+        for function, result in output.items():
+            if function is Function.Exploding:
+                continue
+            ax.errorbar(result["x"], result["y"], result["err"], label=function.verbose)
+
+        ax.set_ylabel(metric.verbose)
+        ax.set_xlabel("Number of executors")
+        ax.legend()
+        plt.tight_layout()
+        if not os.path.exists(f"output/{metric.value}"):
+            os.makedirs(f"output/{metric.value}")
+        plt.savefig(
+            (
+                "output/{}/yelp-comparision-no-exploding".format(
+                    metric.value,
+                )
+            ),
+        )
+        plt.close(fig)
+
+
 if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser(prog="Graph generation")
 
@@ -603,14 +637,10 @@ if __name__ == "__main__":
 
     args = argument_parser.parse_args()
 
-    data, hive_data = load_data(args.input)
-
-    # plot_peak_memory(data)
-    plot_shuffle_writes(data)
-    # plot_comparision_structures(data, 2)
+    data, hive_data, yelp = load_data(args.input)
+    plot_yelp_results(yelp)
     # for i in [100_000, 1_000_000, 10_000_000]:
     #     plot_buckets_compare(data, 2, i)
-    # plot_comparision(data, 2)
     # plot_comparision(data, 8)
     # plot_executors(data, Function.EarlyStopSortMerge)
     # plot_executors(data, Function.Union)
